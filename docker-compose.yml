@@ -1,8 +1,7 @@
-version: "3.4"
 services:
   vpn:
+    image: qmcgaw/gluetun
     container_name: vpn
-    image: dperson/openvpn-client:latest
     cap_add:
       - net_admin # required to modify network interfaces
     restart: unless-stopped
@@ -10,25 +9,34 @@ services:
       - /dev/net/tun:/dev/net/tun
     volumes:
       - /dev/net:/dev/net:z # tun device
-      - ${ROOT}/config/vpn:/vpn # OpenVPN configuration
-    security_opt:
-      - label:disable
     ports:
-      - 8112:8112 # port for deluge web UI to be reachable from local network
-    command: '-f "" -r 192.168.1.0/24' # enable firewall and route local network traffic
+      - 8080:8080 #qbittorrent frontend port hopefully
+    environment:
+      - VPN_SERVICE_PROVIDER=mullvad
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
+      # - ${ROOT}/config/vpn:/vpn # OpenVPN configuration
+    # security_opt:
+      # - label:disable
+    # ports:
+      # - 8112:8112 # port for deluge web UI to be reachable from local network
+    # command: '-f "" -r 192.168.1.0/24' # enable firewall and route local network traffic
 
-  deluge:
-    container_name: deluge
-    image: linuxserver/deluge:latest
+  qbittorrent:
+    container_name: qbittorrent
+    image: lscr.io/linuxserver/qbittorrent:latest
     restart: unless-stopped
     network_mode: service:vpn # run on the vpn network
     environment:
-      - PUID=${PUID} # default user id, defined in .env
-      - PGID=${PGID} # default group id, defined in .env
-      - TZ=${TZ} # timezone, defined in .env
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - WEBUI_PORT=8080
+      - TORRENTING_PORT=6881
     volumes:
-      - ${ROOT}/downloads:/downloads # downloads folder
-      - ${ROOT}/config/deluge:/config # config files
+      - ${ROOT}/torrents:/downloads # downloads folder
+      - ${ROOT}/config/qBittorrent:/config # config files
 
   jackett:
     container_name: jackett
@@ -41,22 +49,22 @@ services:
       - TZ=${TZ} # timezone, defined in .env
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - ${ROOT}/downloads/torrent-blackhole:/downloads # place where to put .torrent files for manual download
+#       - ${ROOT}/downloads/torrent-blackhole:/downloads # place where to put .torrent files for manual download
+# 
       - ${ROOT}/config/jackett:/config # config files
-
-  nzbget:
-    container_name: nzbget
-    image: linuxserver/nzbget:latest
-    restart: unless-stopped
-    network_mode: host
-    environment:
-      - PUID=${PUID} # default user id, defined in .env
-      - PGID=${PGID} # default group id, defined in .env
-      - TZ=${TZ} # timezone, defined in .env
-    volumes:
-      - ${ROOT}/downloads:/downloads # download folder
-      - ${ROOT}/config/nzbget:/config # config files
-
+#   nzbget:
+#     container_name: nzbget
+#     image: linuxserver/nzbget:latest
+#     restart: unless-stopped
+#     network_mode: host
+#     environment:
+#       - PUID=${PUID} # default user id, defined in .env
+#       - PGID=${PGID} # default group id, defined in .env
+#       - TZ=${TZ} # timezone, defined in .env
+#     volumes:
+#       - ${ROOT}/downloads:/downloads # download folder
+#       - ${ROOT}/config/nzbget:/config # config files
+# 
   sonarr:
     container_name: sonarr
     image: linuxserver/sonarr:latest
@@ -69,9 +77,9 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ${ROOT}/config/sonarr:/config # config files
-      - ${ROOT}/complete/tv:/tv # tv shows folder
+      - ${ROOT}/media/tv:/tv # tv shows folder
       - ${ROOT}/downloads:/downloads # download folder
-
+# 
   radarr:
     container_name: radarr
     image: linuxserver/radarr:latest
@@ -84,21 +92,31 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ${ROOT}/config/radarr:/config # config files
-      - ${ROOT}/complete/movies:/movies # movies folder
+      - ${ROOT}/media/movies:/movies # movies folder
       - ${ROOT}/downloads:/downloads # download folder
-
-  plex-server:
-    container_name: plex-server
-    image: plexinc/pms-docker:latest
-    restart: unless-stopped
+# 
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: jellyfin
+    cap_add:
+      - net_admin      
     environment:
-      - TZ=${TZ} # timezone, defined in .env
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      # - JELLYFIN_PublishedServerUrl=http://192.168.0.5 #optional
     network_mode: host
     volumes:
-      - ${ROOT}/config/plex/db:/config # plex database
-      - ${ROOT}/config/plex/transcode:/transcode # temp transcoded files
-      - ${ROOT}/complete:/data # media library
-
+      - ${ROOT}/media/tv:/data/tvshows
+      - ${ROOT}/config/jellyfin/library:/config
+      - ${ROOT}/media/movies:/data/movies
+    # ports:
+      # - 8096:8096
+      # - 8920:8920 #optional
+      # - 7359:7359/udp #optional
+      # - 1900:1900/udp #optional
+    restart: unless-stopped
+# 
   bazarr:
     container_name: bazarr
     image: linuxserver/bazarr
@@ -111,5 +129,5 @@ services:
       - UMASK_SET=022 #optional
     volumes:
       - ${ROOT}/config/bazarr:/config # config files
-      - ${ROOT}/complete/movies:/movies # movies folder
-      - ${ROOT}/complete/tv:/tv # tv shows folder
+      - ${ROOT}/media/movies:/movies # movies folder
+      - ${ROOT}/media/tv:/tv # tv shows folder
