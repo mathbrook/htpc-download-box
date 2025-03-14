@@ -16,12 +16,6 @@ services:
       - VPN_TYPE=wireguard
       - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
       - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
-      # - ${ROOT}/config/vpn:/vpn # OpenVPN configuration
-    # security_opt:
-      # - label:disable
-    # ports:
-      # - 8112:8112 # port for deluge web UI to be reachable from local network
-    # command: '-f "" -r 192.168.1.0/24' # enable firewall and route local network traffic
 
   qbittorrent:
     container_name: qbittorrent
@@ -35,7 +29,7 @@ services:
       - WEBUI_PORT=8080
       - TORRENTING_PORT=6881
     volumes:
-      - ${ROOT}/torrents:/downloads # downloads folder
+      - ${ROOT}/downloads:/downloads # downloads folder
       - ${ROOT}/config/qBittorrent:/config # config files
 
   jackett:
@@ -52,19 +46,7 @@ services:
 #       - ${ROOT}/downloads/torrent-blackhole:/downloads # place where to put .torrent files for manual download
 # 
       - ${ROOT}/config/jackett:/config # config files
-#   nzbget:
-#     container_name: nzbget
-#     image: linuxserver/nzbget:latest
-#     restart: unless-stopped
-#     network_mode: host
-#     environment:
-#       - PUID=${PUID} # default user id, defined in .env
-#       - PGID=${PGID} # default group id, defined in .env
-#       - TZ=${TZ} # timezone, defined in .env
-#     volumes:
-#       - ${ROOT}/downloads:/downloads # download folder
-#       - ${ROOT}/config/nzbget:/config # config files
-# 
+
   sonarr:
     container_name: sonarr
     image: linuxserver/sonarr:latest
@@ -131,3 +113,48 @@ services:
       - ${ROOT}/config/bazarr:/config # config files
       - ${ROOT}/media/movies:/movies # movies folder
       - ${ROOT}/media/tv:/tv # tv shows folder
+      
+  mylar3:
+    container_name: mylar3
+    image: linuxserver/mylar3:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${ROOT}/config/mylar3:/config
+      - ${ROOT}/downloads:/downloads
+      - ${ROOT}/media/comics:/comics
+
+  homarr:
+    image: ghcr.io/homarr-labs/homarr:latest
+    container_name: homarr
+    # network_mode: host
+    environment:
+      - TZ=${TZ}
+      # - PUID=${PUID}
+      # - PGID=${PGID}
+      - SECRET_ENCRYPTION_KEY=${SECRET_ENCRYPTION_KEY}
+    ports:
+      - 7575:7575
+    volumes:
+      # - /var/run/docker.sock:/var/run/docker.sock # Optional, only if you want docker integration
+      - ${ROOT}/config/homarr/appdata:/appdata
+    restart: unless-stopped
+
+  # homer:
+  #   image: b4bz/homer
+  #   container_name: homer
+  #   volumes:
+  #     - ${ROOT}/config/homer:/www/assets # Make sure your local config directory exists
+  #   # environment:
+  #     # - PORT: 8081
+  #   ports:
+  #     - 8081:8081
+  #   user: 1000:1000 # default
+  #   environment:
+  #     - INIT_ASSETS=1 # default, requires the config directory to be writable for the container user (see user option)
+  #     - PORT=8081
+  #   restart: unless-stopped
