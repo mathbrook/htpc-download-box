@@ -4,7 +4,7 @@ services:
     container_name: vpn
     cap_add:
       - net_admin # required to modify network interfaces
-    restart: unless-stopped
+    restart: on-failure:5
     devices:
       - /dev/net/tun:/dev/net/tun
     volumes:
@@ -20,7 +20,7 @@ services:
   qbittorrent:
     container_name: qbittorrent
     image: lscr.io/linuxserver/qbittorrent:latest
-    restart: unless-stopped
+    restart: on-failure:5
     network_mode: service:vpn # run on the vpn network
     environment:
       - PUID=${PUID}
@@ -32,10 +32,24 @@ services:
       - ${ROOT}/downloads:/downloads # downloads folder
       - ${ROOT}/config/qBittorrent:/config # config files
 
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${ROOT}/config/prowlarr:/config
+    ports:
+      - 9696:9696
+    restart: unless-stopped
+
+
   jackett:
     container_name: jackett
     image: linuxserver/jackett:latest
-    restart: unless-stopped
+    restart: on-failure:5
     network_mode: host
     environment:
       - PUID=${PUID} # default user id, defined in .env
@@ -50,7 +64,7 @@ services:
   sonarr:
     container_name: sonarr
     image: linuxserver/sonarr:latest
-    restart: unless-stopped
+    restart: on-failure:5
     network_mode: host
     environment:
       - PUID=${PUID} # default user id, defined in .env
@@ -65,7 +79,7 @@ services:
   radarr:
     container_name: radarr
     image: linuxserver/radarr:latest
-    restart: unless-stopped
+    restart: on-failure:5
     network_mode: host
     environment:
       - PUID=${PUID} # default user id, defined in .env
@@ -97,12 +111,12 @@ services:
       # - 8920:8920 #optional
       # - 7359:7359/udp #optional
       # - 1900:1900/udp #optional
-    restart: unless-stopped
+    restart: on-failure:5
 # 
   bazarr:
     container_name: bazarr
     image: linuxserver/bazarr
-    restart: unless-stopped
+    restart: on-failure:5
     network_mode: host
     environment:
       - PUID=${PUID} # default user id, defined in .env
@@ -117,7 +131,7 @@ services:
   mylar3:
     container_name: mylar3
     image: linuxserver/mylar3:latest
-    restart: unless-stopped
+    restart: on-failure:5
     network_mode: host
     environment:
       - PUID=${PUID}
@@ -140,21 +154,43 @@ services:
     ports:
       - 7575:7575
     volumes:
-      # - /var/run/docker.sock:/var/run/docker.sock # Optional, only if you want docker integration
+      - /var/run/docker.sock:/var/run/docker.sock # Optional, only if you want docker integration
       - ${ROOT}/config/homarr/appdata:/appdata
-    restart: unless-stopped
+    restart: on-failure:5
 
-  # homer:
-  #   image: b4bz/homer
-  #   container_name: homer
-  #   volumes:
-  #     - ${ROOT}/config/homer:/www/assets # Make sure your local config directory exists
-  #   # environment:
-  #     # - PORT: 8081
-  #   ports:
-  #     - 8081:8081
-  #   user: 1000:1000 # default
-  #   environment:
-  #     - INIT_ASSETS=1 # default, requires the config directory to be writable for the container user (see user option)
-  #     - PORT=8081
-  #   restart: unless-stopped
+  dozzle:
+    container_name: dozzle
+    image: amir20/dozzle:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # environment:
+      # - PORT=8083
+    ports:
+      - 8083:8080
+    restart: on-failure:5
+
+  jellyseerr:
+    image: fallenbagel/jellyseerr:latest
+    container_name: jellyseerr
+    environment:
+      - LOG_LEVEL=debug
+      - TZ=${TZ}
+    ports:
+      - 5055:5055
+    volumes:
+      - ${ROOT}/config/jellyseerr:/app/config
+    restart: on-failure:5
+
+  flaresolverr:
+    # DockerHub mirror flaresolverr/flaresolverr:latest
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_HTML=${LOG_HTML:-false}
+      - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
+      - TZ=${TZ}
+    ports:
+      - "${PORT:-8191}:8191"
+    restart: unless-stopped
+    
