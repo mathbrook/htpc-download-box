@@ -4,13 +4,14 @@ services:
     container_name: vpn
     cap_add:
       - net_admin # required to modify network interfaces
-    restart: on-failure:5
+    restart: always
     devices:
       - /dev/net/tun:/dev/net/tun
     volumes:
       - /dev/net:/dev/net:z # tun device
     ports:
       - 8080:8080 #qbittorrent frontend port hopefully
+      - 8945:8945 # yt downloader
     environment:
       - VPN_SERVICE_PROVIDER=mullvad
       - VPN_TYPE=wireguard
@@ -20,7 +21,7 @@ services:
   qbittorrent:
     container_name: qbittorrent
     image: lscr.io/linuxserver/qbittorrent:latest
-    restart: on-failure:5
+    restart: always
     network_mode: service:vpn # run on the vpn network
     environment:
       - PUID=${PUID}
@@ -43,13 +44,13 @@ services:
       - ${ROOT}/config/prowlarr:/config
     ports:
       - 9696:9696
-    restart: unless-stopped
+    restart: always
 
 
   jackett:
     container_name: jackett
     image: linuxserver/jackett:latest
-    restart: on-failure:5
+    restart: always
     network_mode: host
     environment:
       - PUID=${PUID} # default user id, defined in .env
@@ -64,7 +65,7 @@ services:
   sonarr:
     container_name: sonarr
     image: linuxserver/sonarr:latest
-    restart: on-failure:5
+    restart: always
     network_mode: host
     environment:
       - PUID=${PUID} # default user id, defined in .env
@@ -79,7 +80,7 @@ services:
   radarr:
     container_name: radarr
     image: linuxserver/radarr:latest
-    restart: on-failure:5
+    restart: always
     network_mode: host
     environment:
       - PUID=${PUID} # default user id, defined in .env
@@ -106,17 +107,18 @@ services:
       - ${ROOT}/media/tv:/data/tvshows
       - ${ROOT}/config/jellyfin/library:/config
       - ${ROOT}/media/movies:/data/movies
+      - ${ROOT}/pinchflat/downloads:/data/youtube_archive
     # ports:
       # - 8096:8096
       # - 8920:8920 #optional
       # - 7359:7359/udp #optional
       # - 1900:1900/udp #optional
-    restart: on-failure:5
+    restart: always
 # 
   bazarr:
     container_name: bazarr
     image: linuxserver/bazarr
-    restart: on-failure:5
+    restart: always
     network_mode: host
     environment:
       - PUID=${PUID} # default user id, defined in .env
@@ -131,7 +133,7 @@ services:
   mylar3:
     container_name: mylar3
     image: linuxserver/mylar3:latest
-    restart: on-failure:5
+    restart: always
     network_mode: host
     environment:
       - PUID=${PUID}
@@ -156,7 +158,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock # Optional, only if you want docker integration
       - ${ROOT}/config/homarr/appdata:/appdata
-    restart: on-failure:5
+    restart: always
 
   dozzle:
     container_name: dozzle
@@ -167,7 +169,7 @@ services:
       # - PORT=8083
     ports:
       - 8083:8080
-    restart: on-failure:5
+    restart: always
 
   jellyseerr:
     image: fallenbagel/jellyseerr:latest
@@ -179,7 +181,7 @@ services:
       - 5055:5055
     volumes:
       - ${ROOT}/config/jellyseerr:/app/config
-    restart: on-failure:5
+    restart: always
 
   flaresolverr:
     # DockerHub mirror flaresolverr/flaresolverr:latest
@@ -192,5 +194,17 @@ services:
       - TZ=${TZ}
     ports:
       - "${PORT:-8191}:8191"
-    restart: unless-stopped
+    restart: always
     
+  youtube-downloader:
+    image: ghcr.io/kieraneglin/pinchflat:latest
+    container_name: youtube-downloader-pinchflat
+    network_mode: service:vpn
+    environment:
+      # Set the timezone to your local timezone
+      - TZ=America/New_York
+    # ports:
+      # - '8945:8945'
+    volumes:
+      - ${ROOT}/pinchflat/config:/config
+      - ${ROOT}/pinchflat/downloads:/downloads
