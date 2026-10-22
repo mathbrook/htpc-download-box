@@ -1,50 +1,71 @@
 # Automated Docker Updates & Deployment Setup
 
-This guide will help you set up automated Docker image updates using Renovate Bot and automatic deployment via GitHub Actions.
+This guide will help you set up automated Docker image updates using Renovate Bot and automatic deployment via GitHub Actions with a self-hosted runner.
 
 ## Overview
 
 - **Renovate Bot**: Automatically creates PRs when new Docker image versions are available
-- **GitHub Actions**: Automatically deploys changes to your server when PRs are merged
+- **Self-Hosted GitHub Runner**: Runs on your server to execute deployments locally (no public internet access needed!)
+- **GitHub Actions**: Orchestrates the deployment workflow
 - **You**: Review PRs and merge when ready to deploy
 
 ## Prerequisites
 
 - GitHub repository with admin access
-- SSH access to your deployment server
 - Docker Compose stack (already set up ✓)
+- Your server (doesn't need to be publicly accessible!)
 
-## Step 1: Generate SSH Deploy Key
+## Step 1: Create GitHub Personal Access Token (PAT)
 
-On your server, create a dedicated SSH key for GitHub Actions deployments:
+The self-hosted runner needs a token to authenticate with GitHub.
+
+Run the setup script:
 
 ```bash
-# Generate a new SSH key (don't use a passphrase)
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_deploy_key -N ""
-
-# Add the public key to authorized_keys
-cat ~/.ssh/github_deploy_key.pub >> ~/.ssh/authorized_keys
-
-# Display the private key (you'll need this for GitHub Secrets)
-cat ~/.ssh/github_deploy_key
+./setup-github-runner.sh
 ```
 
-**Important**: Copy the entire private key output (including `-----BEGIN OPENSSH PRIVATE KEY-----` and `-----END OPENSSH PRIVATE KEY-----`)
+Or manually:
 
-## Step 2: Configure GitHub Secrets
+1. Go to: https://github.com/settings/tokens?type=beta
+2. Click **Generate new token** (Fine-grained token)
+3. Configure:
+   - **Token name**: `homelab-runner-token`
+   - **Expiration**: 90 days (or your preference)
+   - **Repository access**: Only select repositories → `mathbrook/htpc-download-box`
+   - **Repository permissions**:
+     - Actions: **Read and write**
+     - Administration: **Read and write**
+     - Metadata: **Read-only** (auto-selected)
+4. Click **Generate token** and copy it
+5. Add to your `.env` file:
+   ```bash
+   echo "GITHUB_PAT=your_token_here" >> .env
+   ```
 
-Go to your GitHub repository: https://github.com/mathbrook/htpc-download-box
+## Step 2: Start the GitHub Runner
 
-1. Navigate to: **Settings** → **Secrets and variables** → **Actions**
-2. Click **New repository secret** and add these three secrets:
+Start the runner container:
 
-| Secret Name | Value |
-|------------|-------|
-| `SSH_PRIVATE_KEY` | The private key from Step 1 (entire output) |
-| `SSH_HOST` | Your server's hostname or IP address |
-| `SSH_USER` | `ubuntu` (or your server username) |
+```bash
+docker compose up -d github-runner
+```
 
-## Step 3: Enable Renovate Bot
+Verify it's running:
+
+```bash
+docker logs github-runner --tail 20
+```
+
+You should see messages about the runner connecting to GitHub.
+
+## Step 3: Verify Runner Registration
+
+Go to: https://github.com/mathbrook/htpc-download-box/settings/actions/runners
+
+You should see **homelab-runner** with a green "Idle" status.
+
+## Step 4: Enable Renovate Bot
 
 1. Go to: https://github.com/apps/renovate
 2. Click **Install** or **Configure**
@@ -57,29 +78,34 @@ That's it! Renovate will automatically:
 - Check for updates on the configured schedule (evenings/weekends)
 - Create PRs with changelogs and release notes
 
-## Step 4: Test the Setup
-
-### Test Renovate (Optional)
-
-Renovate will run automatically, but you can trigger a manual run:
-
-1. Go to repository **Settings** → **Webhooks**
-2. Find the Renovate webhook
-3. Click **Redeliver** on a recent delivery
+## Step 5: Test the Setup
 
 ### Test GitHub Actions Deployment
 
-1. Go to **Actions** tab in your repository
+From your server:
+
+```bash
+gh workflow run deploy.yml
+```
+
+Or via GitHub web:
+
+1. Go to: https://github.com/mathbrook/htpc-download-box/actions
 2. Select **Deploy Docker Compose Stack** workflow
 3. Click **Run workflow** dropdown
-4. Enter a reason like "Testing deployment setup"
+4. Enter a reason like "Testing self-hosted runner"
 5. Click **Run workflow**
 
 Monitor the workflow execution. It should:
-- ✅ Connect to your server via SSH
+- ✅ Run on your self-hosted runner (you'll see "homelab-runner" in the logs)
 - ✅ Pull latest code from git
 - ✅ Pull updated Docker images
 - ✅ Restart any changed containers
+- ✅ Show container status
+
+### Test Renovate (Optional)
+
+Renovate will run automatically on its schedule. To test immediately, wait for the onboarding PR that Renovate creates when first installed, then merge it.
 
 ## How It Works
 
@@ -190,12 +216,15 @@ If you want to deploy manually instead:
 
 ### Check Server Status
 
-SSH into your server and run:
+From your server:
 
 ```bash
 cd /home/ubuntu/dev/htpc-download-box
 docker compose ps
 docker compose logs --tail=50
+
+# Check runner status
+docker logs github-runner --tail=50
 ```
 
 ## Troubleshooting
@@ -211,22 +240,36 @@ docker compose logs --tail=50
 1. Go to **Actions** tab and click on failed workflow
 2. Expand failed steps to see error messages
 3. Common issues:
-   - **SSH authentication failed**: Check GitHub Secrets are set correctly
-   - **Permission denied**: Ensure public key is in `~/.ssh/authorized_keys`
+   - **Runner offline**: Check `docker logs github-runner`
+   - **Permission denied**: Runner needs access to docker socket
    - **Git conflicts**: May need to manually resolve on server
+   - **PAT expired**: Generate new token and update `.env`
 
-### SSH Connection Issues
+### Runner Not Connecting
 
-Test SSH connection manually:
+Check runner logs:
 
 ```bash
-ssh -i ~/.ssh/github_deploy_key ubuntu@YOUR_SERVER_IP "echo 'Success!'"
+docker logs github-runner --tail 50
 ```
 
-If this fails:
-- Check firewall settings
-- Verify SSH key permissions (should be 600)
-- Check `~/.ssh/authorized_keys` on server
+Common issues:
+- **Invalid PAT**: Verify token has correct permissions
+- **Token expired**: Generate new token (check expiration date)
+- **Network issues**: Runner needs internet to reach GitHub API
+
+Restart the runner:
+
+```bash
+docker compose restart github-runner
+```
+
+### Runner Shows Offline in GitHub
+
+1. Check if container is running: `docker ps | grep github-runner`
+2. Check logs: `docker logs github-runner`
+3. Verify PAT in `.env` file
+4. Restart: `docker compose restart github-runner`
 
 ### Containers Not Updating
 
@@ -244,11 +287,14 @@ If specific container isn't updating:
 
 ## Security Notes
 
-- **SSH Key**: The deploy key only has access to your server, not GitHub
-- **Least Privilege**: Consider restricting the SSH key to only run specific commands
+- **GitHub PAT**: Store in `.env` file (already in `.gitignore`), never commit to git
+- **Token Scope**: PAT is limited to only your repository with minimal required permissions
+- **Token Expiration**: Set reasonable expiration (90 days) and rotate regularly
+- **Runner Isolation**: Runner runs in Docker container with limited host access
+- **Docker Socket**: Runner has access to Docker socket (required for deployments)
 - **Digest Pinning**: Renovate pins image digests to prevent supply chain attacks
 - **Review Major Updates**: Always review major version updates carefully
-- **Secrets**: Never commit secrets to git; use GitHub Secrets
+- **Local Only**: Runner runs on your private network, no public exposure needed
 
 ## Additional Resources
 
@@ -262,6 +308,13 @@ If specific container isn't updating:
 # View deployment logs on server
 cd /home/ubuntu/dev/htpc-download-box
 docker compose logs -f
+
+# Check runner status
+docker logs github-runner --tail 50
+docker compose ps | grep github-runner
+
+# Restart runner
+docker compose restart github-runner
 
 # Manually pull updates
 docker compose pull
@@ -278,16 +331,21 @@ gh pr list --label renovate
 
 # Trigger manual deployment
 gh workflow run deploy.yml
+
+# Check runner registration
+# Visit: https://github.com/mathbrook/htpc-download-box/settings/actions/runners
 ```
 
 ## What's Next?
 
-1. ✅ Complete the setup steps above
-2. ✅ Test with a manual workflow run
-3. ✅ Wait for first Renovate PR (may take a day)
-4. ✅ Review and merge a test PR
-5. ✅ Verify automatic deployment works
-6. ✅ Adjust schedule/grouping to your preference
-7. ✅ Set up notifications (Discord/Slack/email) if desired
+1. ✅ Run `./setup-github-runner.sh` to create GitHub PAT
+2. ✅ Start runner: `docker compose up -d github-runner`
+3. ✅ Verify runner is online in GitHub settings
+4. ✅ Install Renovate Bot on your repository
+5. ✅ Test with a manual workflow run: `gh workflow run deploy.yml`
+6. ✅ Wait for first Renovate PR (may take a day)
+7. ✅ Review and merge a test PR
+8. ✅ Verify automatic deployment works
+9. ✅ Adjust schedule/grouping to your preference
 
-Enjoy automated updates! 🎉
+Enjoy automated updates with your self-hosted runner! 🎉

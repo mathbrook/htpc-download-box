@@ -17,58 +17,33 @@ on:
 jobs:
   deploy:
     name: Deploy to Production Server
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH key
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Pull latest changes
         run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Test SSH connection
-        run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo 'SSH connection successful'"
-
-      - name: Pull latest changes on server
-        run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            cd /home/ubuntu/dev/htpc-download-box
-            git fetch origin
-            git reset --hard origin/master
-          EOF
+          cd /home/ubuntu/dev/htpc-download-box
+          git fetch origin
+          git reset --hard origin/master
 
       - name: Pull updated Docker images
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            cd /home/ubuntu/dev/htpc-download-box
-            docker compose pull
-          EOF
+          cd /home/ubuntu/dev/htpc-download-box
+          docker compose pull
 
       - name: Deploy updated containers
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            cd /home/ubuntu/dev/htpc-download-box
-            docker compose up -d --remove-orphans
-            docker image prune -f
-          EOF
+          cd /home/ubuntu/dev/htpc-download-box
+          docker compose up -d --remove-orphans
+          docker image prune -f
 
       - name: Verify deployment
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            cd /home/ubuntu/dev/htpc-download-box
-            docker compose ps
-          EOF
-
-      - name: Cleanup SSH key
-        if: always()
-        run: rm -f ~/.ssh/deploy_key
+          cd /home/ubuntu/dev/htpc-download-box
+          docker compose ps
 
       - name: Notify deployment status
         if: always()
