@@ -1,0 +1,59 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":disableDependencyDashboard"
+  ],
+  "timezone": "America/New_York",
+  "schedule": [
+    "after 10pm every weekday",
+    "before 5am every weekday",
+    "every weekend"
+  ],
+  "docker": {
+    "enabled": true,
+    "pinDigests": true
+  },
+  "packageRules": [
+    {
+      "description": "Group all non-major Docker updates together",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "groupName": "docker-updates-non-major",
+      "automerge": false
+    },
+    {
+      "description": "Separate major updates for careful review",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "docker-updates-major-{{depName}}",
+      "automerge": false,
+      "labels": ["major-update", "needs-review"]
+    },
+    {
+      "description": "Group linuxserver.io images together",
+      "matchDatasources": ["docker"],
+      "matchPackagePatterns": ["^lscr\\.io/linuxserver/", "^linuxserver/"],
+      "groupName": "linuxserver-images",
+      "automerge": false
+    },
+    {
+      "description": "Critical security updates",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["patch"],
+      "matchCurrentVersion": "!/^0/",
+      "labels": ["security"],
+      "schedule": ["at any time"]
+    }
+  ],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "commitMessagePrefix": "⬆️",
+  "commitMessageAction": "Update",
+  "commitMessageTopic": "{{depName}}",
+  "commitMessageExtra": "to {{newVersion}}",
+  "prTitle": "⬆️ {{commitMessageAction}} {{commitMessageTopic}} {{commitMessageExtra}}",
+  "labels": ["dependencies", "renovate"],
+  "assigneesFromCodeOwners": true,
+  "reviewersFromCodeOwners": true
+}
